@@ -1,0 +1,302 @@
+---
+title: "m15_bhv_202109_lme_rndint_2fac_naomit_inv"
+geometry: margin=.5in
+output:
+  pdf_document:
+    latex_engine: lualatex
+    highlight: tango
+  html_document: default
+fontsize: 8pt
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = NA)
+knitr::opts_chunk$set(fig.width=5, fig.height=5)
+```
+
+# Morph 15 Behavioral Data Analysed via Linear Mixed Effects Model
+
+These data are from subjects 8-31 (25 subjects) of the Morph15 Suffix productivity Project.  The data were collected between 3/25/2015 and 25/9/2015 using E-Prime.  The E-Primes files used were "Morph15Group1Correct" and "Morph15Group2Correct".  The excel file exported from E-data Aid is 'm15_bhv_25'
+
+The stimuli are read in from 'm15_stm_frq.csv'.
+
+# Load Packages
+
+```{r load packages,  warning=FALSE, message=FALSE}
+library(knitr)
+library(markdown)
+library(readr)
+library(ez)
+library(lme4)
+library(stringr)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(gridExtra)
+library(RColorBrewer)
+```
+
+## Define Standard error of the Mean Function
+
+```{r define SEM function}
+sem = function(x)
+  {
+  sqrt(var(x)/length(x))
+  }
+```
+
+
+# Read in Data and Format Data
+
+This chunk reads the dataset in long format into an R dataframe using the read.csv(file) function.
+
+The stimuli are read in from "m15_stm_frq.csv". This file contains stimuli divided into high and low parsability on the basis of affix frequency (afx_frq), relative frequency determined via a  median split based on the **stem frequency to whole-word frequency ratio** (med_splt) and relative frequency determined via a a split based on whether the **stem frequency to whole-word frequency ratio** is greater than 1  or less than 1 (ratio_splt).
+
+8/1/2021
+New version of the analysis adds another split based on whether the stem to whole-word frequency is greater or less then 1.5.
+
+
+** In order to read in files, remember to 'set working directory to project directory""
+
+```{r read_data}
+
+library(readr)
+m15_bhv <- read_csv("M15_ALL_SUBJS_BHV_DATA_orig-3.csv")
+frq <- read_csv("stimuli/m15_stm_frq_rel_subset.csv")
+m15_bhv <- m15_bhv %>% mutate(Subject = replace(Subject, Subject == 241, 24)) # changes subj 241 to 24
+```
+
+This chunk changes removes extraneous digits from column names and makes them all lowercase, renames cols with `.x` after their name and removes `rel` column from freq dataframe 
+
+```{r change_colnames}
+
+names(m15_bhv) <- tolower(names(m15_bhv))
+names(frq) <- tolower(names(frq))
+
+frq <- rename(frq, stemid = trigger)
+frq <- rename (frq, prime = prime.x)
+frq <- rename (frq, stem = stem.x)
+frq$rel <- NULL
+
+
+```
+
+This chunk creates a separate dataframe for the words 
+
+```{r separate_by_lex_status}
+
+m15_bhv_words<-filter(m15_bhv,correct_response == 6)
+m15_bhv_words$relatedness <- ifelse(m15_bhv_words$trigger <= 100, "related", "unrelated")
+```
+
+We now combine the stimulus df with the data df
+
+```{r combine_stm_dat}
+
+m15_bhv_frq_words <- left_join(m15_bhv_words, frq, by = "stemid")
+# m15_bhv_frq_word <- dplyr::select(m15_bhv_frq_words, subject, prime, target, stem.x, stemid, relatedness, afx_frq, med_splt, target.acc, target.rt)
+
+write.csv(m15_bhv_frq_words, "m15_bhv_frq_words.csv")
+
+```
+
+# Replaces NA rt values with the mean for the dataset in column new.rt.  Also creates new dataframe (m15_bhv_frq_words_na.omit) with just the non-missing data
+
+```{r freplacewithmean}
+
+
+m15_bhv_frq_words$new.rt<- replace_na(m15_bhv_frq_words$target.rt.trm.err,
+                                                 mean(m15_bhv_frq_words$target.rt.trm.err,
+                                                      na.rm=TRUE ))
+missing_data<- filter(m15_bhv_frq_words, is.na(m15_bhv_frq_words$target.rt.trm.err))
+m15_na.omit <- filter(m15_bhv_frq_words, !is.na(m15_bhv_frq_words$target.rt.trm.err))
+xtab.missing.data <- xtabs(~relatedness+med_splt, data=missing_data)
+m15_bhv_frq_words_rmna <-filter(m15_bhv_frq_words,!is.na(m15_bhv_frq_words$target.rt.trm.err))
+```
+
+
+This chunk creates two new dependent variables by doing a log transformation and an inverse transformation of the reaction times
+
+```{r transform_rts}
+
+m15_bhv_frq_words_rmna$log.rt <- log(m15_bhv_frq_words_rmna$target.rt.trm.err)
+m15_bhv_frq_words_rmna$inverse.rt <- (1/(m15_bhv_frq_words_rmna$target.rt.trm.err))*1000
+
+write.csv(m15_bhv_frq_words_rmna, "m15_bhv_frq_words_rmna.csv")
+```
+
+
+
+# Inverse RT
+## Condition Means: Inverse RT
+
+ `summarise()` creates a new data frame. It will have one (or more) rows for each combination of grouping variables; if there are no grouping variables, the output will have a single row summarising all observations in the input. It will contain one column for each grouping variable and one column for each of the summary statistics that you have specified.
+
+```{r calculate_condition_means_invrt, echo = FALSE}
+
+afx_frq_inv.means<- m15_bhv_frq_words_rmna %>%
+  group_by(afx_frq, relatedness) %>%
+  summarise(meanRT = mean(inverse.rt),
+            num_stim = n(),
+            se = sem(inverse.rt))
+afx_frq_inv.means
+
+
+med_splt_inv.means <- m15_bhv_frq_words_rmna %>%
+  group_by(med_splt, relatedness ) %>%
+  summarise(meanRT = mean(inverse.rt),
+            num_stim = n(),
+            se = sem(inverse.rt))
+med_splt_inv.means
+```
+
+
+
+## Barplots for Inverse RT
+```{r barplots_invrt, echo = FALSE, echo = FALSE}
+
+
+p1 <-  afx_frq_inv.means %>% ggplot(aes(x=afx_frq, y=meanRT, fill = relatedness, ymin = meanRT - se, ymax = meanRT + se)) +
+  coord_cartesian(xlim = NULL, ylim = c(1.60, 1.85), expand = TRUE, default = FALSE,clip = "on") +
+  geom_bar(stat = "identity", position = "dodge", width = 0.5, color = "black")  +
+  xlab("Simple affix frequency") + 
+  ylab("Inverse RT (speed) in microseconds")  +  
+  scale_fill_manual(values = c("coral2", "deepskyblue4"))+ 
+  geom_errorbar(width = .08, position = position_dodge(0.5)) + theme_classic() + 
+   geom_text(aes(label = round(meanRT, digits = 2)),colour = "white", size = 3.5, vjust = 4.5, position = position_dodge(.5)) 
+
+#  scale_y_continuous(labels = scales::scientific)
+  
+
+p2 <-  med_splt_inv.means %>% ggplot(aes(x=med_splt, y=meanRT, fill = relatedness, ymin = meanRT - se, ymax = meanRT + se)) +
+  coord_cartesian(xlim = NULL, ylim = c(1.60, 1.85), expand = TRUE, default = FALSE,clip = "on") +
+  geom_bar(stat = "identity", position = "dodge", width = 0.5, color = "black")  +
+  xlab("Ratio of stem to wholeword frequency based on median split") + 
+  ylab("Inverse RT (speed) in microseconds")  +  
+  scale_fill_manual(values = c("coral2", "deepskyblue4"))+ 
+  geom_errorbar(width = .08, position = position_dodge(0.5)) + theme_classic()+ 
+  geom_text(aes(label = round(meanRT, digits = 2)),colour = "white", size = 3.5, vjust = 4.5, position = position_dodge(.5)) 
+
+#  scale_y_continuous(labels = scales::scientific)
+  
+  
+grid.arrange( p1, p2)
+```
+
+
+# Models
+Reminder about goodness-of-fit criteria (from Wikipedia)
+Suppose that we have a statistical model of some data. Let k be the number of estimated parameters in the model. Let $\hat {L}$  be the maximum value of the likelihood function for the model, where 'likelihood' is used to describe the plausibility of a value for the parameter, given some data. The likelihood function answers the question *What is the probability of observing the current dataset, when I assume a given set of parameters for my linear model?*  Considering only μ, the likelihood L or its natural logarithm (LogL) is maximum when $\sum_{i=1}^n ( y - \mu)^2$ is a minimum.  Then the AIC value of the model is the following:
+
+$AIC =2k-2\ln(\hat {L})$
+
+Given a set of candidate models for the data, the preferred model is the one with the minimum AIC value. Thus, AIC rewards goodness of fit (as assessed by the likelihood function), but it also includes a penalty that is an increasing function of the number of estimated parameters. 
+
+From Petr Keil (http://www.petrkeil.com/?p=836) "Model selection is a process of seeking the model in a set of candidate models that gives the best balance between model fit and complexity (Burnham & Anderson 2002). I have always used AIC for that. But you can also do that by crossvalidation. Specifically, Stone (1977) showed that the AIC and leave-one out crossvalidation are asymptotically equivalent. "  He also included the  BIC (Bayesian Information Criterion) and found that all three are equivalent.
+
+From (https://www.scribbr.com/statistics/akaike-information-criterion/) : If a model is more than 2 AIC units lower than another, then it is considered significantly better than that model.
+
+
+
+
+
+# Inverse RT
+## Run ANOVA Affix Frequency
+
+### Null Model: Affix Frequency: Inverse RT
+
+```{r afxfrq_inv_null.model, comment=NA}
+
+afxfrq_inv_null.model = lmer(inverse.rt ~ 1 + (1|subject) + (1|stemid), 
+                             data= m15_bhv_frq_words_rmna, REML=FALSE)
+summary(afxfrq_inv_null.model)
+```
+
+### Main Effects Model: Affix Frequency: Inverse RT
+
+This  model of the Inverse RT data contains fixed intercepts for *affix frequency* and *relatedness* as well as  random intercepts for subjects and items (adjustments to the mean for each subject and item)
+
+```{r afxfrq_inv_main.model, comment=NA}
+
+afxfrq_inv_main.model = lmer(inverse.rt ~ afx_frq + relatedness + (1|subject) + (1|stemid), 
+                             data= m15_bhv_frq_words_rmna, REML=FALSE)
+summary(afxfrq_inv_main.model)
+```
+
+### Interaction Model: Affix Frequency: Inverse RT
+```{r afx_frq_inv_inter.model, comment=NA}
+
+afxfrq_inv_inter.model = lmer(inverse.rt ~ afx_frq * relatedness + (1|subject) + (1|stemid), 
+                              data= m15_bhv_frq_words_rmna, REML=FALSE)
+summary(afxfrq_inv_inter.model)
+```
+
+### Compare Null and Main Models: Affix Frequency
+
+```{r  null_main_afx_frq}
+anova(afxfrq_inv_null.model,afxfrq_inv_main.model)
+```
+
+### Compare Main and Interaction Models: Affix Frequency
+
+```{r  main_full_afx_frq}
+anova(afxfrq_inv_main.model,afxfrq_inv_inter.model)
+```
+
+
+## Run ANOVA Median Split
+
+### Null Model: Median Split: Inverse RT
+
+```{r medsplt_inv_null.model, comment=NA}
+
+medsplt_inv_null.model = lmer(inverse.rt ~ 1 + (1|subject) + (1|stemid), 
+                             data= m15_bhv_frq_words_rmna, REML=FALSE)
+summary(medsplt_inv_null.model)
+```
+
+### Main Effects Model: Median Split: Inverse RT
+
+This  model of the Inverse RT data contains fixed intercepts for *affix frequency* and *relatedness* as well as  random intercepts for subjects and items (adjustments to the mean for each subject and item)
+
+```{r medsplt_inv_main.model, comment=NA}
+
+medsplt_inv_main.model = lmer(inverse.rt ~ med_splt + relatedness + (1|subject) + (1|stemid), 
+                              data= m15_bhv_frq_words_rmna,REML=FALSE)
+summary(medsplt_inv_main.model)
+```
+
+### Interaction Model: Median Split: Inverse RT
+```{r medsplt_inv_inter.model, comment=NA}
+
+medsplt_inv_inter.model = lmer(inverse.rt ~ med_splt * relatedness + (1|subject) + (1|stemid),
+                               data= m15_bhv_frq_words_rmna,REML=FALSE)
+summary(medsplt_inv_inter.model)
+```
+
+### Compare Null and Main Models: Median Split
+
+```{r  null_main_medsplt}
+anova(medsplt_inv_null.model,medsplt_inv_main.model)
+```
+
+### Compare Main and Interaction Models: Median Split
+
+```{r  main_full_medsplt}
+anova(medsplt_inv_main.model,medsplt_inv_inter.model)
+```
+
+
+# Compare models using AIC
+
+```{r aic_model_comparison}
+library(AICcmodavg)
+afxfrq_models <- list(afxfrq_inv_null.model, afxfrq_inv_main.model, afxfrq_inv_inter.model)
+medsplt_models <- list(medsplt_inv_null.model, medsplt_inv_main.model, medsplt_inv_inter.model)
+model.names <- c('null.mod', 'maineffects.mod', 'interaction.mod')
+
+aictab(cand.set = afxfrq_models, modnames = model.names)
+aictab(cand.set = medsplt_models, modnames = model.names)
+```
