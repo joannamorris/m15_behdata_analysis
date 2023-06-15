@@ -161,11 +161,11 @@ med_splt_inv.means
 p1 <-  afx_frq_inv.means %>% ggplot(aes(x=afx_frq, y=meanRT, fill = relatedness, ymin = meanRT - se, ymax = meanRT + se)) +
   coord_cartesian(xlim = NULL, ylim = c(1.60, 1.85), expand = TRUE, default = FALSE,clip = "on") +
   geom_bar(stat = "identity", position = "dodge", width = 0.5, color = "black")  +
-  xlab("Simple affix frequency") + 
+  xlab("Productivity") + 
   ylab("Inverse RT (speed) in microseconds")  +  
-  scale_fill_manual(values = c("coral2", "deepskyblue4"))+ 
+  scale_fill_manual(values = c("coral2", "deepskyblue"))+ 
   geom_errorbar(width = .08, position = position_dodge(0.5)) + theme_classic() + 
-   geom_text(aes(label = round(meanRT, digits = 2)),colour = "white", size = 3.5, vjust = 4.5, position = position_dodge(.5)) 
+   geom_text(aes(label = round(meanRT, digits = 2)),colour = "black", size = 3.5, vjust = 4.5, position = position_dodge(.5)) 
 
 #  scale_y_continuous(labels = scales::scientific)
   
@@ -173,16 +173,18 @@ p1 <-  afx_frq_inv.means %>% ggplot(aes(x=afx_frq, y=meanRT, fill = relatedness,
 p2 <-  med_splt_inv.means %>% ggplot(aes(x=med_splt, y=meanRT, fill = relatedness, ymin = meanRT - se, ymax = meanRT + se)) +
   coord_cartesian(xlim = NULL, ylim = c(1.60, 1.85), expand = TRUE, default = FALSE,clip = "on") +
   geom_bar(stat = "identity", position = "dodge", width = 0.5, color = "black")  +
-  xlab("Ratio of stem to wholeword frequency based on median split") + 
+  xlab("Parsability") + 
   ylab("Inverse RT (speed) in microseconds")  +  
-  scale_fill_manual(values = c("coral2", "deepskyblue4"))+ 
+  scale_fill_manual(values = c("coral2", "deepskyblue"))+ 
   geom_errorbar(width = .08, position = position_dodge(0.5)) + theme_classic()+ 
-  geom_text(aes(label = round(meanRT, digits = 2)),colour = "white", size = 3.5, vjust = 4.5, position = position_dodge(.5)) 
+  geom_text(aes(label = round(meanRT, digits = 2)),colour = "black", size = 3.5, vjust = 4.5, position = position_dodge(.5)) 
 
 #  scale_y_continuous(labels = scales::scientific)
+ 
+p1
+p2
   
-  
-grid.arrange( p1, p2)
+# grid.arrange( p1, p2)
 ```
 
 
